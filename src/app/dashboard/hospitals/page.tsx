@@ -1,5 +1,8 @@
 'use client';
 
+// Force dynamic rendering to prevent static generation issues with Firebase
+export const dynamic = 'force-dynamic';
+
 import { ProtectedLayout } from '@/components/layout/ProtectedLayout';
 import { HospitalsTable } from '@/components/tables/HospitalsTable';
 

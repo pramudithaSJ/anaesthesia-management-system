@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
 import { 
   collection, 
   getDocs, 
@@ -52,10 +52,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [peopleLoading, setPeopleLoading] = useState(true);
   const [lastPeopleDoc, setLastPeopleDoc] = useState<DocumentSnapshot | null>(null);
   const [hasMorePeople, setHasMorePeople] = useState(true);
+  const lastPeopleDocRef = useRef<DocumentSnapshot | null>(null);
 
   // Load hospitals
   const loadHospitals = useCallback(async () => {
     try {
+      if (!db) {
+        console.error('Database not initialized');
+        return;
+      }
+      
       setHospitalsLoading(true);
       const hospitalsCollection = collection(db, 'hospitals');
       const hospitalsQuery = query(hospitalsCollection, orderBy('name'));
@@ -77,6 +83,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // Load people with pagination
   const loadPeople = useCallback(async (isLoadMore = false) => {
     try {
+      if (!db) {
+        console.error('Database not initialized');
+        return;
+      }
+      
       if (!isLoadMore) setPeopleLoading(true);
       
       const peopleCollection = collection(db, 'people');
@@ -86,11 +97,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
         limit(PEOPLE_PAGE_SIZE)
       );
       
-      if (isLoadMore && lastPeopleDoc) {
+      if (isLoadMore && lastPeopleDocRef.current) {
         peopleQuery = query(
           peopleCollection,
           orderBy('lastName'),
-          startAfter(lastPeopleDoc),
+          startAfter(lastPeopleDocRef.current),
           limit(PEOPLE_PAGE_SIZE)
         );
       }
@@ -107,9 +118,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
       } else {
         setPeople(peopleData);
         setLastPeopleDoc(null); // Reset pagination for fresh load
+        lastPeopleDocRef.current = null;
       }
       
-      setLastPeopleDoc(snapshot.docs[snapshot.docs.length - 1] || null);
+      const lastDoc = snapshot.docs[snapshot.docs.length - 1] || null;
+      setLastPeopleDoc(lastDoc);
+      lastPeopleDocRef.current = lastDoc;
       setHasMorePeople(snapshot.docs.length === PEOPLE_PAGE_SIZE);
       
     } catch (error) {
@@ -123,11 +137,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     loadHospitals();
     loadPeople();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array for initial load only
 
   // Hospital CRUD operations
   const addHospital = async (hospitalData: Omit<Hospital, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
+      if (!db) {
+        throw new Error('Database not initialized');
+      }
+      
       const now = new Date().toISOString();
       const cleanedData = cleanFirebaseData({
         ...hospitalData,
@@ -159,7 +178,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         updatedAt: now
       });
       
-      await updateDoc(doc(db, 'hospitals', id), cleanedData);
+      await updateDoc(doc(db!, 'hospitals', id), cleanedData);
       
       setHospitals(prev => 
         prev.map(hospital => 
@@ -176,7 +195,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const deleteHospital = async (id: string) => {
     try {
-      await deleteDoc(doc(db, 'hospitals', id));
+      await deleteDoc(doc(db!, 'hospitals', id));
       setHospitals(prev => prev.filter(hospital => hospital.id !== id));
     } catch (error) {
       console.error('Error deleting hospital:', error);
@@ -210,7 +229,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         updatedAt: now
       });
       
-      const docRef = await addDoc(collection(db, 'people'), cleanedData);
+      const docRef = await addDoc(collection(db!, 'people'), cleanedData);
       
       const newPerson: Person = {
         id: docRef.id,
@@ -234,7 +253,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         updatedAt: now
       });
       
-      await updateDoc(doc(db, 'people', id), cleanedData);
+      await updateDoc(doc(db!, 'people', id), cleanedData);
       
       setPeople(prev => 
         prev.map(person => 
@@ -251,7 +270,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const deletePerson = async (id: string) => {
     try {
-      await deleteDoc(doc(db, 'people', id));
+      await deleteDoc(doc(db!, 'people', id));
       setPeople(prev => prev.filter(person => person.id !== id));
     } catch (error) {
       console.error('Error deleting person:', error);
@@ -260,7 +279,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const loadMorePeople = useCallback(async () => {
-    if (hasMorePeople && lastPeopleDoc) {
+    if (hasMorePeople && lastPeopleDoc && db) {
       try {
         const peopleCollection = collection(db, 'people');
         const peopleQuery = query(

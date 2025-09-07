@@ -25,18 +25,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
         try {
           // Get user data from Firestore
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          if (!db) {
+            throw new Error('Database not initialized');
+          }
+          const userDoc = await getDoc(doc(db!, 'users', firebaseUser.uid));
           if (userDoc.exists()) {
             const userData = userDoc.data() as User;
             console.log('User data fetched:', userData);
             setUser(userData);
           } else {
             // User doc doesn't exist, sign out
-            await signOut(auth);
+            if (auth) {
+              await signOut(auth);
+            }
             setUser(null);
           }
         } catch (error) {
@@ -54,8 +64,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
+      if (!auth || !db) {
+        throw new Error('Firebase services not initialized');
+      }
+      
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+      const userDoc = await getDoc(doc(db!, 'users', userCredential.user.uid));
       
       if (!userDoc.exists()) {
         throw new Error('User profile not found');
@@ -78,6 +92,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
+      if (!auth) {
+        throw new Error('Auth service not initialized');
+      }
+      
       await signOut(auth);
       setUser(null);
     } catch (error) {

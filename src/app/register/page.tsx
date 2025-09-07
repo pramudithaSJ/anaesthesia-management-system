@@ -1,5 +1,8 @@
 'use client';
 
+// Force dynamic rendering to prevent static generation issues with Firebase
+export const dynamic = 'force-dynamic';
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
@@ -52,6 +55,10 @@ export default function RegisterPage() {
     try {
       setLoading(true);
       setError('');
+      
+      if (!auth || !db) {
+        throw new Error('Firebase services not initialized');
+      }
       
       // Create Firebase Auth user
       const userCredential = await createUserWithEmailAndPassword(

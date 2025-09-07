@@ -1,6 +1,9 @@
 'use client';
 
 import { useData } from '@/contexts/DataContext';
+
+// Force dynamic rendering to prevent static generation issues with Firebase
+export const dynamic = 'force-dynamic';
 import { ProtectedLayout } from '@/components/layout/ProtectedLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
