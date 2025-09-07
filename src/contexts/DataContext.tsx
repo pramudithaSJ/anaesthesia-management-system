@@ -106,6 +106,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         setPeople(prev => [...prev, ...peopleData]);
       } else {
         setPeople(peopleData);
+        setLastPeopleDoc(null); // Reset pagination for fresh load
       }
       
       setLastPeopleDoc(snapshot.docs[snapshot.docs.length - 1] || null);
@@ -116,13 +117,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
     } finally {
       if (!isLoadMore) setPeopleLoading(false);
     }
-  }, [lastPeopleDoc]);
+  }, []); // Remove dependency to prevent recreation
 
   // Initial load
   useEffect(() => {
     loadHospitals();
     loadPeople();
-  }, [loadHospitals, loadPeople]);
+  }, []); // Empty dependency array for initial load only
 
   // Hospital CRUD operations
   const addHospital = async (hospitalData: Omit<Hospital, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -258,18 +259,40 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loadMorePeople = async () => {
-    if (hasMorePeople) {
-      await loadPeople(true);
+  const loadMorePeople = useCallback(async () => {
+    if (hasMorePeople && lastPeopleDoc) {
+      try {
+        const peopleCollection = collection(db, 'people');
+        const peopleQuery = query(
+          peopleCollection,
+          orderBy('lastName'),
+          startAfter(lastPeopleDoc),
+          limit(PEOPLE_PAGE_SIZE)
+        );
+        
+        const snapshot = await getDocs(peopleQuery);
+        
+        const peopleData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Person[];
+        
+        setPeople(prev => [...prev, ...peopleData]);
+        setLastPeopleDoc(snapshot.docs[snapshot.docs.length - 1] || null);
+        setHasMorePeople(snapshot.docs.length === PEOPLE_PAGE_SIZE);
+        
+      } catch (error) {
+        console.error('Error loading more people:', error);
+      }
     }
-  };
+  }, [hasMorePeople, lastPeopleDoc]);
 
-  const refreshData = async () => {
+  const refreshData = useCallback(async () => {
     await Promise.all([
       loadHospitals(),
       loadPeople()
     ]);
-  };
+  }, [loadHospitals, loadPeople]);
 
   const value = {
     hospitals,
